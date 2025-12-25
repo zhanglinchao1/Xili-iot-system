@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edge设备管理系统 - 储能柜边缘认证网关</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232563eb'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='white' font-family='Arial, sans-serif' font-weight='bold'>E</text></svg>">
+    <link rel="stylesheet" href="static/css/styles.css?v=1765590000">
+    <link rel="stylesheet" href="static/assets/fontawesome/css/all.min.css">
+    <!-- Chart.js - 本地版本(避免网络问题) -->
+    <script src="static/assets/js/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- 侧边栏导航 -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <i class="fas fa-cube"></i>
+            <h2>储能柜管理系统</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-item active" data-page="dashboard">
+                <i class="fas fa-chart-line"></i>
+                <span>仪表板</span>
+            </a>
+            <a href="#" class="nav-item" data-page="devices">
+                <i class="fas fa-microchip"></i>
+                <span>设备管理</span>
+            </a>
+            <a href="#" class="nav-item" data-page="statistics">
+                <i class="fas fa-chart-pie"></i>
+                <span>统计分析</span>
+            </a>
+            <a href="#" class="nav-item" data-page="alerts">
+                <i class="fas fa-bell"></i>
+                <span>告警管理</span>
+            </a>
+            <a href="#" class="nav-item" data-page="logs">
+                <i class="fas fa-file-alt"></i>
+                <span>日志记录</span>
+            </a>
+            <a href="#" class="nav-item" data-page="license">
+                <i class="fas fa-key"></i>
+                <span>许可证管理</span>
+            </a>
+            <a href="#" class="nav-item" data-page="cabinet">
+                <i class="fas fa-cube"></i>
+                <span>储能柜管理</span>
+            </a>
+            <a href="#" class="nav-item" data-page="vulnerability">
+                <i class="fas fa-shield-alt"></i>
+                <span>脆弱性分析</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="system-status">
+                <i class="fas fa-circle status-online"></i>
+                <span>系统在线</span>
+            </div>
+            <div class="license-status" id="licenseStatus" style="display: none;">
+                <i class="fas fa-key"></i>
+                <div class="license-info">
+                    <div class="license-text">
+                        <span id="licenseStatusText">许可证已启用</span>
+                    </div>
+                    <div class="license-detail" id="licenseDetail"></div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 主内容区域 -->
+    <main class="main-content">
+        <!-- 顶部导航栏 -->
+        <header class="top-bar">
+            <button class="menu-toggle" id="menuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="top-bar-right">
+                <button class="btn-icon alert-notification" id="alertNotificationBtn" title="查看告警" onclick="App.showPage('alerts')">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge" id="topBarAlertCount">0</span>
+                </button>
+
+                <button class="btn-icon" id="refreshBtn" title="刷新数据">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- 页面内容容器 -->
+        <div class="content-wrapper">
+            <!-- 仪表板页面 -->
+            <div class="page active" id="dashboardPage">
+                <div class="page-header">
+                    <h1>设备监控仪表板</h1>
+                </div>
+
+                <!-- 统计卡片 -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-primary">
+                            <i class="fas fa-microchip"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="statTotal">0</div>
+                            <div class="stat-label">设备总数</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-success">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="statOnline">0</div>
+                            <div class="stat-label">在线设备</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="statOffline">0</div>
+                            <div class="stat-label">离线设备</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-danger">
+                            <i class="fas fa-times-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="statFault">0</div>
+                            <div class="stat-label">故障设备</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 传感器实时监控 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-broadcast-tower"></i> 传感器实时监控</h3>
+                        <span class="refresh-indicator" id="lastRefreshTime">-</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="sensors-realtime-grid">
+                            <!-- CO2 传感器 -->
+                            <div class="sensor-panel" id="sensorCo2">
+                                <div class="sensor-panel-header">
+                                    <div class="sensor-icon co2">
+                                        <i class="fas fa-wind"></i>
+                                    </div>
+                                    <div class="sensor-info">
+                                        <h4>CO2传感器</h4>
+                                        <span class="sensor-status offline">离线</span>
+                                    </div>
+                                </div>
+                                <div class="sensor-panel-body">
+                                    <div class="sensor-reading">
+                                        <div class="reading-value">--</div>
+                                        <div class="reading-unit">ppm</div>
+                                    </div>
+                                    <div class="sensor-details">
+                                        <div class="detail-item">
+                                            <i class="fas fa-thermometer-half"></i>
+                                            <span class="detail-label">阈值:</span>
+                                            <span class="detail-value" id="co2ThresholdText">< 5000 ppm</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <i class="fas fa-clock"></i>
+                                            <span class="detail-label">告警时间:</span>
+                                            <span class="detail-value" id="co2Time">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- CO 传感器 -->
+                            <div class="sensor-panel" id="sensorCo">
+                                <div class="sensor-panel-header">
+                                    <div class="sensor-icon co">
+                                        <i class="fas fa-smog"></i>
+                                    </div>
+                                    <div class="sensor-info">
+                                        <h4>CO传感器</h4>
+                                        <span class="sensor-status offline">离线</span>
+                                    </div>
+                                </div>
+                                <div class="sensor-panel-body">
+                                    <div class="sensor-reading">
+                                        <div class="reading-value">--</div>
+                                        <div class="reading-unit">ppm</div>
+                                    </div>
+                                    <div class="sensor-details">
+                                        <div class="detail-item">
+                                            <i class="fas fa-thermometer-half"></i>
+                                            <span class="detail-label">阈值:</span>
+                                            <span class="detail-value" id="coThresholdText">< 50 ppm</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <i class="fas fa-clock"></i>
+                                            <span class="detail-label">告警时间:</span>
+                                            <span class="detail-value" id="coTime">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 烟雾传感器 -->
+                            <div class="sensor-panel" id="sensorSmoke">
+                                <div class="sensor-panel-header">
+                                    <div class="sensor-icon smoke">
+                                        <i class="fas fa-fire"></i>
+                                    </div>
+                                    <div class="sensor-info">
+                                        <h4>烟雾传感器</h4>
+                                        <span class="sensor-status offline">离线</span>
+                                    </div>
+                                </div>
+                                <div class="sensor-panel-body">
+                                    <div class="sensor-reading">
+                                        <div class="reading-value">--</div>
+                                        <div class="reading-unit">ppm</div>
+                                    </div>
+                                    <div class="sensor-details">
+                                        <div class="detail-item">
+                                            <i class="fas fa-thermometer-half"></i>
+                                            <span class="detail-label">阈值:</span>
+                                            <span class="detail-value" id="smokeThresholdText">< 1000 ppm</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <i class="fas fa-clock"></i>
+                                            <span class="detail-label">告警时间:</span>
+                                            <span class="detail-value" id="smokeTime">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 液位传感器 -->
+                            <div class="sensor-panel" id="sensorLiquidLevel">
+                                <div class="sensor-panel-header">
+                                    <div class="sensor-icon liquid-level">
+                                        <i class="fas fa-tint"></i>
+                                    </div>
+                                    <div class="sensor-info">
+                                        <h4>液位传感器</h4>
+                                        <span class="sensor-status offline">离线</span>
+                                    </div>
+                                </div>
+                                <div class="sensor-panel-body">
+                                    <div class="sensor-reading">
+                                        <div class="reading-value">--</div>
+                                        <div class="reading-unit">mm</div>
+                                    </div>
+                                    <div class="sensor-details">
+                                        <div class="detail-item">
+                                            <i class="fas fa-thermometer-half"></i>
+                                            <span class="detail-label">阈值:</span>
+                                            <span class="detail-value" id="liquidLevelThresholdText">100-900 mm</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <i class="fas fa-clock"></i>
+                                            <span class="detail-label">告警时间:</span>
+                                            <span class="detail-value" id="liquidLevelTime">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 电导率传感器 -->
+                            <div class="sensor-panel" id="sensorConductivity">
+                                <div class="sensor-panel-header">
+                                    <div class="sensor-icon conductivity">
+                                        <i class="fas fa-bolt"></i>
+                                    </div>
+                                    <div class="sensor-info">
+                                        <h4>电导率传感器</h4>
+                                        <span class="sensor-status offline">离线</span>
+                                    </div>
+                                </div>
+                                <div class="sensor-panel-body">
+                                    <div class="sensor-reading">
+                                        <div class="reading-value">--</div>
+                                        <div class="reading-unit">mS/cm</div>
+                                    </div>
+                                    <div class="sensor-details">
+                                        <div class="detail-item">
+                                            <i class="fas fa-thermometer-half"></i>
+                                            <span class="detail-label">阈值:</span>
+                                            <span class="detail-value" id="conductivityThresholdText">0.5-10 mS/cm</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <i class="fas fa-clock"></i>
+                                            <span class="detail-label">告警时间:</span>
+                                            <span class="detail-value" id="conductivityTime">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 温度传感器 -->
+                            <div class="sensor-panel" id="sensorTemperature">
+                                <div class="sensor-panel-header">
+                                    <div class="sensor-icon temperature">
+                                        <i class="fas fa-temperature-high"></i>
+                                    </div>
+                                    <div class="sensor-info">
+                                        <h4>温度传感器</h4>
+                                        <span class="sensor-status offline">离线</span>
+                                    </div>
+                                </div>
+                                <div class="sensor-panel-body">
+                                    <div class="sensor-reading">
+                                        <div class="reading-value">--</div>
+                                        <div class="reading-unit">°C</div>
+                                    </div>
+                                    <div class="sensor-details">
+                                        <div class="detail-item">
+                                            <i class="fas fa-thermometer-half"></i>
+                                            <span class="detail-label">阈值:</span>
+                                            <span class="detail-value" id="temperatureThresholdText">-10 ~ 60 °C</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <i class="fas fa-clock"></i>
+                                            <span class="detail-label">告警时间:</span>
+                                            <span class="detail-value" id="temperatureTime">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 流速传感器 -->
+                            <div class="sensor-panel" id="sensorFlow">
+                                <div class="sensor-panel-header">
+                                    <div class="sensor-icon flow">
+                                        <i class="fas fa-water"></i>
+                                    </div>
+                                    <div class="sensor-info">
+                                        <h4>流速传感器</h4>
+                                        <span class="sensor-status offline">离线</span>
+                                    </div>
+                                </div>
+                                <div class="sensor-panel-body">
+                                    <div class="sensor-reading">
+                                        <div class="reading-value">--</div>
+                                        <div class="reading-unit">L/min</div>
+                                    </div>
+                                    <div class="sensor-details">
+                                        <div class="detail-item">
+                                            <i class="fas fa-thermometer-half"></i>
+                                            <span class="detail-label">阈值:</span>
+                                            <span class="detail-value" id="flowThresholdText">0.5-100 L/min</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <i class="fas fa-clock"></i>
+                                            <span class="detail-label">告警时间:</span>
+                                            <span class="detail-value" id="flowTime">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 设备管理页面 -->
+            <div class="page" id="devicesPage">
+                <div class="page-header">
+                    <div>
+                        <h1>设备管理</h1>
+                    </div>
+                    <button class="btn btn-primary" id="addDeviceBtn">
+                        <i class="fas fa-plus"></i> 注册新设备
+                    </button>
+                </div>
+
+                <!-- 过滤和搜索 -->
+                <div class="filter-bar">
+                    <div class="filter-group">
+                        <label>状态筛选</label>
+                        <select id="statusFilter" class="form-select">
+                            <option value="">全部状态</option>
+                            <option value="online">在线</option>
+                            <option value="offline">离线</option>
+                            <option value="disabled">禁用</option>
+                            <option value="fault">故障</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>传感器类型</label>
+                        <select id="sensorTypeFilter" class="form-select">
+                            <option value="">全部类型</option>
+                            <option value="co2">CO2传感器</option>
+                            <option value="co">CO传感器</option>
+                            <option value="smoke">烟雾传感器</option>
+                            <option value="liquid_level">液位传感器</option>
+                            <option value="conductivity">电导率传感器</option>
+                            <option value="temperature">温度传感器</option>
+                            <option value="flow">流速传感器</option>
+                        </select>
+                    </div>
+                    <div class="filter-group flex-grow">
+                        <label>搜索设备</label>
+                        <input type="text" id="deviceSearch" class="form-input" placeholder="输入设备ID或型号搜索...">
+                    </div>
+                </div>
+
+                <!-- 设备列表 -->
+                <div class="card">
+                    <div class="card-body no-padding">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>设备ID</th>
+                                        <th>传感器类型</th>
+                                        <th>储能柜ID</th>
+                                        <th>状态</th>
+                                        <th>型号</th>
+                                        <th>实时监测数据</th>
+                                        <th>最后在线</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="deviceTableBody">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="pagination" id="pagination">
+                            <!-- 动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 统计分析页面 -->
+            <div class="page" id="statisticsPage">
+                <div class="page-header">
+                    <h1>统计分析</h1>
+                </div>
+
+                <!-- 时间范围选择 -->
+                <div class="chart-time-selector">
+                    <button class="time-btn active" data-days="0" title="显示今天的数据">实时状态</button>
+                    <button class="time-btn" data-days="7">最近7天</button>
+                    <button class="time-btn" data-days="15">最近15天</button>
+                    <button class="time-btn" data-days="30">最近30天</button>
+                </div>
+
+                <!-- 7种传感器图表模块 -->
+                <div class="sensor-charts-grid">
+                    <!-- CO2传感器图表 -->
+                    <div class="chart-module" id="chartCO2">
+                        <div class="chart-module-header">
+                            <div class="chart-icon co2">
+                                <i class="fas fa-wind"></i>
+                            </div>
+                            <div class="chart-info">
+                                <h3>CO2传感器</h3>
+                                <div class="chart-stats">
+                                    <span class="chart-stat">
+                                        <i class="fas fa-database"></i>
+                                        <span id="co2Count">0</span> 条数据
+                                    </span>
+                                    <span class="chart-stat">
+                                        <i class="fas fa-chart-line"></i>
+                                        平均: <span id="co2Avg">--</span> ppm
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="co2Chart"></canvas>
+                        </div>
+                        <div class="chart-summary">
+                            <div class="summary-item">
+                                <span class="summary-label">最小值:</span>
+                                <span class="summary-value" id="co2Min">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">最大值:</span>
+                                <span class="summary-value" id="co2Max">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">阈值:</span>
+                                <span class="summary-value">< 5000 ppm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CO传感器图表 -->
+                    <div class="chart-module" id="chartCO">
+                        <div class="chart-module-header">
+                            <div class="chart-icon co">
+                                <i class="fas fa-smog"></i>
+                            </div>
+                            <div class="chart-info">
+                                <h3>CO传感器</h3>
+                                <div class="chart-stats">
+                                    <span class="chart-stat">
+                                        <i class="fas fa-database"></i>
+                                        <span id="coCount">0</span> 条数据
+                                    </span>
+                                    <span class="chart-stat">
+                                        <i class="fas fa-chart-line"></i>
+                                        平均: <span id="coAvg">--</span> ppm
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="coChart"></canvas>
+                        </div>
+                        <div class="chart-summary">
+                            <div class="summary-item">
+                                <span class="summary-label">最小值:</span>
+                                <span class="summary-value" id="coMin">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">最大值:</span>
+                                <span class="summary-value" id="coMax">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">阈值:</span>
+                                <span class="summary-value">< 50 ppm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 烟雾传感器图表 -->
+                    <div class="chart-module" id="chartSmoke">
+                        <div class="chart-module-header">
+                            <div class="chart-icon smoke">
+                                <i class="fas fa-fire"></i>
+                            </div>
+                            <div class="chart-info">
+                                <h3>烟雾传感器</h3>
+                                <div class="chart-stats">
+                                    <span class="chart-stat">
+                                        <i class="fas fa-database"></i>
+                                        <span id="smokeCount">0</span> 条数据
+                                    </span>
+                                    <span class="chart-stat">
+                                        <i class="fas fa-chart-line"></i>
+                                        平均: <span id="smokeAvg">--</span> ppm
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="smokeChart"></canvas>
+                        </div>
+                        <div class="chart-summary">
+                            <div class="summary-item">
+                                <span class="summary-label">最小值:</span>
+                                <span class="summary-value" id="smokeMin">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">最大值:</span>
+                                <span class="summary-value" id="smokeMax">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">阈值:</span>
+                                <span class="summary-value">< 1000 ppm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 液位传感器图表 -->
+                    <div class="chart-module" id="chartLiquidLevel">
+                        <div class="chart-module-header">
+                            <div class="chart-icon liquid-level">
+                                <i class="fas fa-tint"></i>
+                            </div>
+                            <div class="chart-info">
+                                <h3>液位传感器</h3>
+                                <div class="chart-stats">
+                                    <span class="chart-stat">
+                                        <i class="fas fa-database"></i>
+                                        <span id="liquidLevelCount">0</span> 条数据
+                                    </span>
+                                    <span class="chart-stat">
+                                        <i class="fas fa-chart-line"></i>
+                                        平均: <span id="liquidLevelAvg">--</span> mm
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="liquidLevelChart"></canvas>
+                        </div>
+                        <div class="chart-summary">
+                            <div class="summary-item">
+                                <span class="summary-label">最小值:</span>
+                                <span class="summary-value" id="liquidLevelMin">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">最大值:</span>
+                                <span class="summary-value" id="liquidLevelMax">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">阈值:</span>
+                                <span class="summary-value">100-900 mm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 电导率传感器图表 -->
+                    <div class="chart-module" id="chartConductivity">
+                        <div class="chart-module-header">
+                            <div class="chart-icon conductivity">
+                                <i class="fas fa-bolt"></i>
+                            </div>
+                            <div class="chart-info">
+                                <h3>电导率传感器</h3>
+                                <div class="chart-stats">
+                                    <span class="chart-stat">
+                                        <i class="fas fa-database"></i>
+                                        <span id="conductivityCount">0</span> 条数据
+                                    </span>
+                                    <span class="chart-stat">
+                                        <i class="fas fa-chart-line"></i>
+                                        平均: <span id="conductivityAvg">--</span> mS/cm
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="conductivityChart"></canvas>
+                        </div>
+                        <div class="chart-summary">
+                            <div class="summary-item">
+                                <span class="summary-label">最小值:</span>
+                                <span class="summary-value" id="conductivityMin">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">最大值:</span>
+                                <span class="summary-value" id="conductivityMax">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">阈值:</span>
+                                <span class="summary-value">0.5-10 mS/cm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 温度传感器图表 -->
+                    <div class="chart-module" id="chartTemperature">
+                        <div class="chart-module-header">
+                            <div class="chart-icon temperature">
+                                <i class="fas fa-temperature-high"></i>
+                            </div>
+                            <div class="chart-info">
+                                <h3>温度传感器</h3>
+                                <div class="chart-stats">
+                                    <span class="chart-stat">
+                                        <i class="fas fa-database"></i>
+                                        <span id="temperatureCount">0</span> 条数据
+                                    </span>
+                                    <span class="chart-stat">
+                                        <i class="fas fa-chart-line"></i>
+                                        平均: <span id="temperatureAvg">--</span> °C
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="temperatureChart"></canvas>
+                        </div>
+                        <div class="chart-summary">
+                            <div class="summary-item">
+                                <span class="summary-label">最小值:</span>
+                                <span class="summary-value" id="temperatureMin">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">最大值:</span>
+                                <span class="summary-value" id="temperatureMax">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">阈值:</span>
+                                <span class="summary-value">-10 ~ 60 °C</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 流速传感器图表 -->
+                    <div class="chart-module" id="chartFlow">
+                        <div class="chart-module-header">
+                            <div class="chart-icon flow">
+                                <i class="fas fa-water"></i>
+                            </div>
+                            <div class="chart-info">
+                                <h3>流速传感器</h3>
+                                <div class="chart-stats">
+                                    <span class="chart-stat">
+                                        <i class="fas fa-database"></i>
+                                        <span id="flowCount">0</span> 条数据
+                                    </span>
+                                    <span class="chart-stat">
+                                        <i class="fas fa-chart-line"></i>
+                                        平均: <span id="flowAvg">--</span> L/min
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="flowChart"></canvas>
+                        </div>
+                        <div class="chart-summary">
+                            <div class="summary-item">
+                                <span class="summary-label">最小值:</span>
+                                <span class="summary-value" id="flowMin">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">最大值:</span>
+                                <span class="summary-value" id="flowMax">--</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">阈值:</span>
+                                <span class="summary-value">0.5-100 L/min</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 告警管理页面 -->
+            <div class="page" id="alertsPage">
+                <div class="page-header">
+                    <h1>告警管理</h1>
+                    <div class="page-actions">
+                        <span class="badge badge-danger" id="unresolvedAlertsCount">0</span>
+                        <span style="margin-left: 8px; color: #666;">未解决告警</span>
+                    </div>
+                </div>
+
+                <!-- 筛选条件 -->
+                <div class="card">
+                    <div class="card-body">
+                        <form id="alertsFilterForm" class="filter-form">
+                            <div class="form-row" style="display: flex; align-items: flex-end; gap: 16px; flex-wrap: nowrap;">
+                                <div class="form-group" style="flex: 1; min-width: 180px;">
+                                    <label for="alertsSeverity">严重程度</label>
+                                    <select id="alertsSeverity" class="form-select">
+                                        <option value="">全部级别</option>
+                                        <option value="critical">严重 (Critical)</option>
+                                        <option value="high">高危 (High)</option>
+                                        <option value="medium">中等 (Medium)</option>
+                                        <option value="low">低 (Low)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex: 1; min-width: 150px;">
+                                    <label for="alertsResolved">状态</label>
+                                    <select id="alertsResolved" class="form-select">
+                                        <option value="">全部状态</option>
+                                        <option value="false" selected>未解决</option>
+                                        <option value="true">已解决</option>
+                                    </select>
+                                </div>
+                                <div style="display: flex; gap: 8px; flex-shrink: 0; white-space: nowrap;">
+                                    <button type="submit" class="btn btn-primary" title="筛选告警" style="padding: 8px 16px;">
+                                        <i class="fas fa-filter"></i> 筛选
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" id="refreshAlertsBtn" title="刷新告警列表" style="padding: 8px 16px;">
+                                        <i class="fas fa-sync-alt"></i> 刷新
+                                    </button>
+                                    <button type="button" class="btn btn-success" id="batchResolveAlertsBtn" title="批量解决选中告警" style="padding: 8px 16px; display: none;">
+                                        <i class="fas fa-check-double"></i> 批量解决
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 告警列表 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>告警列表</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px;"><input type="checkbox" id="selectAllAlerts" title="全选/取消全选"></th>
+                                        <th style="width: 80px;">级别</th>
+                                        <th style="width: 140px;">设备ID</th>
+                                        <th>告警消息</th>
+                                        <th style="width: 100px;">触发值</th>
+                                        <th style="width: 100px;">阈值</th>
+                                        <th style="width: 160px;">告警时间</th>
+                                        <th style="width: 120px;">状态</th>
+                                        <th style="width: 100px;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="alertsTableBody">
+                                    <tr>
+                                        <td colspan="8" class="text-center">
+                                            <div class="loading">
+                                                <i class="fas fa-spinner fa-spin"></i> 加载中...
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- 分页控件 -->
+                        <div class="pagination" id="alertsPagination" style="display: none;">
+                            <button class="btn btn-sm btn-secondary" id="alertsPrevBtn">
+                                <i class="fas fa-chevron-left"></i> 上一页
+                            </button>
+                            <span class="pagination-info">
+                                第 <span id="alertsCurrentPage">1</span> 页，共 <span id="alertsTotalPages">1</span> 页
+                            </span>
+                            <button class="btn btn-sm btn-secondary" id="alertsNextBtn">
+                                下一页 <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 日志记录页面 -->
+            <div class="page" id="logsPage">
+                <div class="page-header">
+                    <h1>日志记录</h1>
+                </div>
+
+                <!-- Tab切换 -->
+                <div class="tabs-container">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="alert-logs">
+                            <i class="fas fa-exclamation-triangle"></i> 告警日志
+                        </button>
+                        <button class="tab-btn" data-tab="auth-logs">
+                            <i class="fas fa-shield-alt"></i> 认证日志
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 告警日志Tab -->
+                <div class="tab-content active" id="alert-logs-tab">
+                    <!-- 筛选表单 -->
+                    <div class="filter-section">
+                        <form id="alertLogsFilterForm" class="filter-form">
+                            <div class="filter-row">
+                                <div class="filter-group">
+                                    <label for="alertLogStartDate">开始日期</label>
+                                    <input type="date" id="alertLogStartDate" class="form-input">
+                                </div>
+                                <div class="filter-group">
+                                    <label for="alertLogEndDate">结束日期</label>
+                                    <input type="date" id="alertLogEndDate" class="form-input">
+                                </div>
+                                <div class="filter-group">
+                                    <label for="alertLogSeverity">严重级别</label>
+                                    <select id="alertLogSeverity" class="form-select">
+                                        <option value="">全部</option>
+                                        <option value="critical">严重</option>
+                                        <option value="high">高</option>
+                                        <option value="medium">中</option>
+                                        <option value="low">低</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="alertLogResolved">解决状态</label>
+                                    <select id="alertLogResolved" class="form-select">
+                                        <option value="">全部</option>
+                                        <option value="false">未解决</option>
+                                        <option value="true">已解决</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="alertLogDeviceID">设备ID</label>
+                                    <input type="text" id="alertLogDeviceID" placeholder="搜索设备ID" class="form-input">
+                                </div>
+                                <div class="filter-actions">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-search"></i> 查询
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" id="resetAlertLogsBtn">
+                                        <i class="fas fa-redo"></i> 重置
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- 批量操作工具栏 -->
+                    <div class="batch-actions" id="batchActionsAlert" style="display: none; margin-bottom: 15px;">
+                        <button type="button" class="btn btn-danger" id="batchDeleteAlertLogsBtn">
+                            <i class="fas fa-trash-alt"></i> 批量删除
+                        </button>
+                        <span id="selectedAlertLogsCount" style="margin-left: 10px; color: #666;"></span>
+                    </div>
+
+                    <!-- 日志表格 -->
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="selectAllAlertLogs"></th>
+                                    <th>ID</th>
+                                    <th>设备ID</th>
+                                    <th>告警类型</th>
+                                    <th>严重级别</th>
+                                    <th>告警值</th>
+                                    <th>阈值</th>
+                                    <th>触发时间</th>
+                                    <th>状态</th>
+                                    <th>解决时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alertLogsTableBody">
+                                <tr>
+                                    <td colspan="10" class="text-center">加载中...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 分页 -->
+                    <div class="pagination-container">
+                        <div class="pagination-info" id="alertLogsPaginationInfo">
+                            共 0 条记录
+                        </div>
+                        <div class="pagination">
+                            <button class="btn btn-small" id="alertLogsPrevBtn" disabled>
+                                <i class="fas fa-chevron-left"></i> 上一页
+                            </button>
+                            <span class="pagination-current" id="alertLogsCurrentPage">第 1 页</span>
+                            <button class="btn btn-small" id="alertLogsNextBtn" disabled>
+                                下一页 <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 认证日志Tab -->
+                <div class="tab-content" id="auth-logs-tab">
+                    <!-- 筛选表单 -->
+                    <div class="filter-section">
+                        <form id="authLogsFilterForm" class="filter-form">
+                            <div class="filter-row">
+                                <div class="filter-group">
+                                    <label for="authLogStartDate">开始日期</label>
+                                    <input type="date" id="authLogStartDate" class="form-input">
+                                </div>
+                                <div class="filter-group">
+                                    <label for="authLogEndDate">结束日期</label>
+                                    <input type="date" id="authLogEndDate" class="form-input">
+                                </div>
+                                <div class="filter-group">
+                                    <label for="authLogStatus">认证状态</label>
+                                    <select id="authLogStatus" class="form-select">
+                                        <option value="">全部</option>
+                                        <option value="success">成功</option>
+                                        <option value="pending">待验证</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="authLogDeviceID">设备ID</label>
+                                    <input type="text" id="authLogDeviceID" placeholder="搜索设备ID" class="form-input">
+                                </div>
+                                <div class="filter-actions">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-search"></i> 查询
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" id="resetAuthLogsBtn">
+                                        <i class="fas fa-redo"></i> 重置
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- 批量操作按钮 -->
+                    <div class="batch-actions" id="batchActionsAuth" style="display: none;">
+                        <button class="btn btn-danger" id="batchDeleteAuthLogsBtn">
+                            <i class="fas fa-trash"></i> 批量删除
+                        </button>
+                        <span class="batch-info" id="selectedAuthLogsCount"></span>
+                    </div>
+
+                    <!-- 一键清空按钮 -->
+                    <div class="batch-actions" style="margin-bottom: 15px;">
+                        <button class="btn btn-warning" id="clearAllAuthLogsBtn" title="清空所有认证日志">
+                            <i class="fas fa-trash-alt"></i> 一键清空日志
+                        </button>
+                    </div>
+
+                    <!-- 日志表格 -->
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="selectAllAuthLogs" /></th>
+                                    <th>ID</th>
+                                    <th>设备ID</th>
+                                    <th>操作类型</th>
+                                    <th>状态</th>
+                                    <th>时间</th>
+                                    <th>会话ID</th>
+                                    <th>详情</th>
+                                </tr>
+                            </thead>
+                            <tbody id="authLogsTableBody">
+                                <tr>
+                                    <td colspan="8" class="text-center">加载中...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 分页 -->
+                    <div class="pagination-container">
+                        <div class="pagination-info" id="authLogsPaginationInfo">
+                            共 0 条记录
+                        </div>
+                        <div class="pagination">
+                            <button class="btn btn-small" id="authLogsPrevBtn" disabled>
+                                <i class="fas fa-chevron-left"></i> 上一页
+                            </button>
+                            <span class="pagination-current" id="authLogsCurrentPage">第 1 页</span>
+                            <button class="btn btn-small" id="authLogsNextBtn" disabled>
+                                下一页 <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 许可证管理页面 -->
+            <div class="page" id="licensePage">
+                <div class="page-header">
+                    <h1><i class="fas fa-key"></i> 许可证管理</h1>
+                </div>
+
+                <div class="page-content">
+                    <!-- 许可证状态卡片 -->
+                    <div class="license-info-card" id="licenseInfoCard">
+                        <div class="loading-spinner" id="licenseLoading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>加载中...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 储能柜管理页面 -->
+            <div class="page" id="cabinetPage">
+                <div class="page-header">
+                    <h1><i class="fas fa-cube"></i> 储能柜管理</h1>
+                </div>
+
+                <div class="page-content">
+                    <!-- 储能柜基本信息 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-info-circle"></i> 基本信息</h3>
+                            <span id="cabinetStatusBadge" class="badge badge-warning">
+                                <i class="fas fa-exclamation-circle"></i> 未注册到Cloud
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <form id="cabinetForm">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="cabinetId">储能柜ID <span class="required">*</span></label>
+                                        <input type="text"
+                                               id="cabinetId"
+                                               class="form-input"
+                                               placeholder="例如: CABINET-001"
+                                               required
+                                               maxlength="64">
+                                        <small class="form-hint">储能柜唯一标识符（修改后会同步更新所有设备的cabinet_id）</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cabinetName">储能柜名称 <span class="required">*</span></label>
+                                        <input type="text"
+                                               id="cabinetName"
+                                               class="form-input"
+                                               placeholder="例如: 一号储能柜"
+                                               required
+                                               maxlength="64">
+                                    </div>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="cabinetLocation">位置信息</label>
+                                        <div class="location-search-wrapper">
+                                            <div class="input-with-button">
+                                        <input type="text"
+                                               id="cabinetLocation"
+                                                       class="form-input location-search-input"
+                                                       placeholder="搜索位置，例如: 北京市海淀区"
+                                                       maxlength="128"
+                                                       autocomplete="off">
+                                                <button type="button"
+                                                        class="btn btn-secondary btn-icon"
+                                                        id="searchLocationBtn"
+                                                        title="搜索位置">
+                                                    <i class="fas fa-search"></i>
+                                                </button>
+                                            </div>
+                                            <div id="locationSuggestions" class="location-suggestions" style="display: none;"></div>
+                                        </div>
+                                        <input type="hidden" id="cabinetLatitude">
+                                        <input type="hidden" id="cabinetLongitude">
+                                        <small class="form-hint" id="locationCoords">储能柜物理位置</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cabinetCapacity">容量 (kWh)</label>
+                                        <input type="number"
+                                               id="cabinetCapacity"
+                                               class="form-input"
+                                               placeholder="例如: 100.5"
+                                               step="0.1"
+                                               min="0">
+                                        <small class="form-hint">储能柜额定容量</small>
+                                    </div>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="cabinetDeviceModel">设备型号</label>
+                                        <input type="text"
+                                               id="cabinetDeviceModel"
+                                               class="form-input"
+                                               placeholder="例如: ESC-V1.0"
+                                               maxlength="64">
+                                        <small class="form-hint">储能柜设备型号</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>IP地址</label>
+                                        <div class="form-input-readonly">
+                                            <i class="fas fa-network-wired"></i>
+                                            <span id="cabinetIPAddress">---.---.---.---</span>
+                                        </div>
+                                        <small class="form-hint">系统自动获取</small>
+                                    </div>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>MAC地址</label>
+                                        <div class="form-input-readonly">
+                                            <i class="fas fa-network-wired"></i>
+                                            <span id="cabinetMacAddress">--:--:--:--:--:--</span>
+                                        </div>
+                                        <small class="form-hint">系统自动获取</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>&nbsp;</label>
+                                        <button type="button"
+                                                class="btn btn-primary"
+                                                id="saveCabinetBtn">
+                                            <i class="fas fa-save"></i> 保存信息
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Cloud端连接配置 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-cloud"></i> Cloud端连接配置</h3>
+                            <button type="button" class="btn btn-small btn-primary" id="editCloudConfigBtn">
+                                <i class="fas fa-edit"></i> 编辑配置
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <!-- 显示模式 -->
+                            <div id="cloudConfigDisplay">
+                                <div class="config-info-grid">
+                                    <div class="config-info-item">
+                                        <div class="config-label">
+                                            <i class="fas fa-server"></i> Cloud端地址
+                                        </div>
+                                        <div class="config-value" id="cloudEndpoint">
+                                            未配置
+                                        </div>
+                                    </div>
+                                    <div class="config-info-item">
+                                        <div class="config-label">
+                                            <i class="fas fa-key"></i> API Key
+                                        </div>
+                                        <div class="config-value" id="cloudApiKey">
+                                            未配置
+                                        </div>
+                                    </div>
+                                    <div class="config-info-item">
+                                        <div class="config-label">
+                                            <i class="fas fa-toggle-on"></i> 启用状态
+                                        </div>
+                                        <div class="config-value">
+                                            <span id="cloudEnabled" class="badge badge-secondary">未启用</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 编辑模式 -->
+                            <div id="cloudConfigEdit" style="display: none;">
+                                <form id="cloudConfigForm">
+                                    <div class="form-group">
+                                        <label for="cloudEndpointInput">Cloud端地址</label>
+                                        <input type="text"
+                                               id="cloudEndpointInput"
+                                               class="form-input"
+                                               placeholder="http://IP:端口/api/v1 (例如: http://192.168.1.100:8003/api/v1)"
+                                               value=""
+                                               required>
+                                        <small class="form-help">格式: http://Cloud服务器IP:端口/api/v1</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cloudApiKeyInput">Cloud API Key <span class="required">*</span></label>
+                                        <div class="input-with-button">
+                                            <input type="text"
+                                                   id="cloudApiKeyInput"
+                                                   class="form-input"
+                                                   placeholder="ck_xxxxxxxxxxxxxxxxxxxxxxxxx"
+                                                   required>
+                                            <button type="button"
+                                                    class="btn btn-secondary btn-icon"
+                                                    id="toggleApiKeyVisibility"
+                                                    title="显示/隐藏API Key">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                        <small class="form-help">
+                                            从Cloud端"储能柜管理"页面获取API Key。
+                                            <a href="#" id="howToGetApiKeyLink" style="color: #007bff; text-decoration: underline;">
+                                                如何获取?
+                                            </a>
+                                        </small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="cloudEnabledInput" checked>
+                                            启用Cloud端连接
+                                        </label>
+                                        <small class="form-help">启用后将自动与Cloud端同步数据</small>
+                                    </div>
+                                    <div class="button-group">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-save"></i> 保存配置
+                                        </button>
+                                        <button type="button" class="btn btn-secondary" id="cancelEditCloudConfigBtn">
+                                            <i class="fas fa-times"></i> 取消
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div class="alert alert-info" style="margin-top: 20px;">
+                                <i class="fas fa-info-circle"></i>
+                                <div>
+                                    <strong>配置说明：</strong>
+                                    Cloud端连接配置会保存到 <code>configs/config.yaml</code> 文件。
+                                    修改配置后建议重启Edge服务以确保完全生效。
+                                </div>
+                            </div>
+
+                            <div class="button-group" style="margin-top: 20px;">
+                                <button type="button"
+                                        class="btn btn-secondary"
+                                        id="testCloudConnectionBtn">
+                                    <i class="fas fa-link"></i> 测试连接
+                                </button>
+                                <button type="button"
+                                        class="btn btn-success"
+                                        id="registerToCloudBtn"
+                                        disabled>
+                                    <i class="fas fa-cloud-upload-alt"></i> 注册到Cloud端
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 注册指南 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-question-circle"></i> 注册指南</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="guide-steps">
+                                <div class="guide-step">
+                                    <div class="step-number">1</div>
+                                    <div class="step-content">
+                                        <h4>配置Cloud端连接</h4>
+                                        <p>在 <code>configs/config.yaml</code> 中配置：</p>
+                                        <pre>cloud:
+  enabled: true
+  endpoint: "http://cloud-server:8003/api/v1"
+  api_key: "your_api_key"
+  cabinet_id: "CABINET-001"</pre>
+                                    </div>
+                                </div>
+                                <div class="guide-step">
+                                    <div class="step-number">2</div>
+                                    <div class="step-content">
+                                        <h4>填写储能柜信息</h4>
+                                        <p>填写储能柜名称、位置、容量等基本信息，然后点击"保存信息"按钮。</p>
+                                    </div>
+                                </div>
+                                <div class="guide-step">
+                                    <div class="step-number">3</div>
+                                    <div class="step-content">
+                                        <h4>测试连接</h4>
+                                        <p>点击"测试连接"按钮，确保Edge端可以访问Cloud端。</p>
+                                    </div>
+                                </div>
+                                <div class="guide-step">
+                                    <div class="step-number">4</div>
+                                    <div class="step-content">
+                                        <h4>一键注册</h4>
+                                        <p>点击"注册到Cloud端"按钮，系统将自动调用Cloud API完成注册。</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 脆弱性分析页面 -->
+            <div class="page" id="vulnerabilityPage">
+                <div class="page-header">
+                    <h1><i class="fas fa-shield-alt"></i> 脆弱性分析</h1>
+                    <button class="btn btn-primary" id="refreshVulnerabilityBtn">
+                        <i class="fas fa-sync-alt"></i> 刷新评估
+                    </button>
+                </div>
+
+                <div class="page-content">
+                    <!-- 综合评分卡片 -->
+                    <div class="vulnerability-overview-card">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-chart-pie"></i> 综合评分</h3>
+                            </div>
+                            <div class="card-body" style="text-align: center;">
+                                <div class="overall-score-display">
+                                    <div class="score-circle" id="overallScoreCircle">
+                                        <span class="score-value" id="overallScoreValue">--</span>
+                                    </div>
+                                    <div class="risk-level-badge" id="riskLevelBadge">
+                                        <span id="riskLevelText">评估中...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 各维度评分卡片 (四维度) -->
+                    <div class="score-cards-grid">
+                        <div class="score-card">
+                            <div class="score-card-icon license">
+                                <i class="fas fa-certificate"></i>
+                            </div>
+                            <div class="score-card-content">
+                                <h4>许可证合规性</h4>
+                                <div class="score-value" id="licenseScore">--</div>
+                                <div class="score-desc">许可证状态检查</div>
+                            </div>
+                        </div>
+                        <div class="score-card">
+                            <div class="score-card-icon communication">
+                                <i class="fas fa-wifi"></i>
+                            </div>
+                            <div class="score-card-content">
+                                <h4>通信异常评分</h4>
+                                <div class="score-value" id="communicationScore">--</div>
+                                <div class="score-desc">基于传输指标</div>
+                            </div>
+                        </div>
+                        <div class="score-card">
+                            <div class="score-card-icon config">
+                                <i class="fas fa-cog"></i>
+                            </div>
+                            <div class="score-card-content">
+                                <h4>配置安全评分</h4>
+                                <div class="score-value" id="configScore">--</div>
+                                <div class="score-desc">配置检查结果</div>
+                            </div>
+                        </div>
+                        <div class="score-card">
+                            <div class="score-card-icon data">
+                                <i class="fas fa-database"></i>
+                            </div>
+                            <div class="score-card-content">
+                                <h4>数据异常评分</h4>
+                                <div class="score-value" id="dataScore">--</div>
+                                <div class="score-desc">数据质量分析</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 传输指标详情 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-network-wired"></i> 传输指标</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="metrics-grid">
+                                <div class="metric-item">
+                                    <div class="metric-label">平均延迟</div>
+                                    <div class="metric-value" id="metricLatency">-- ms</div>
+                                </div>
+                                <div class="metric-item">
+                                    <div class="metric-label">丢包率</div>
+                                    <div class="metric-value" id="metricLoss">-- %</div>
+                                </div>
+                                <div class="metric-item">
+                                    <div class="metric-label">吞吐量</div>
+                                    <div class="metric-value" id="metricThroughput">-- Kbps</div>
+                                </div>
+                                <div class="metric-item">
+                                    <div class="metric-label">MQTT成功率</div>
+                                    <div class="metric-value" id="metricMQTT">-- %</div>
+                                </div>
+                                <div class="metric-item">
+                                    <div class="metric-label">重连次数</div>
+                                    <div class="metric-value" id="metricReconnect">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 检测到的漏洞 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-exclamation-triangle"></i> 检测到的漏洞</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="vulnerability-list" id="vulnerabilityList">
+                                <p style="text-align: center; color: #666;">暂无检测到的漏洞</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 模态框：添加/编辑设备 -->
+    <div class="modal" id="deviceModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">注册新设备</h3>
+                <button class="modal-close" id="modalClose">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="deviceForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="deviceId">设备ID <span class="required">*</span></label>
+                            <input type="text" id="deviceId" name="device_id" class="form-input" required maxlength="64">
+                            <small class="form-hint">1-64字符，系统内唯一</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="cabinetId">储能柜ID <span class="required">*</span></label>
+                            <input type="text" id="cabinetId" name="cabinet_id" class="form-input" required maxlength="64">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="sensorType">传感器类型 <span class="required">*</span></label>
+                            <select id="sensorType" name="sensor_type" class="form-select" required>
+                                <option value="">请选择</option>
+                                <option value="co2">CO2传感器</option>
+                                <option value="co">CO传感器</option>
+                                <option value="smoke">烟雾传感器</option>
+                                <option value="liquid_level">液位传感器</option>
+                                <option value="conductivity">电导率传感器</option>
+                                <option value="temperature">温度传感器</option>
+                                <option value="flow">流速传感器</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="deviceStatus">设备状态</label>
+                            <select id="deviceStatus" name="status" class="form-select">
+                                <option value="offline">离线</option>
+                                <option value="online">在线</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="deviceModel">设备型号</label>
+                            <input type="text" id="deviceModel" name="model" class="form-input" maxlength="64">
+                        </div>
+                        <div class="form-group">
+                            <label for="manufacturer">制造商</label>
+                            <input type="text" id="manufacturer" name="manufacturer" class="form-input" maxlength="64">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="firmwareVer">固件版本</label>
+                        <input type="text" id="firmwareVer" name="firmware_ver" class="form-input" maxlength="32">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="publicKey">公钥 (ZKP) <span class="required">*</span></label>
+                        <textarea id="publicKey" name="public_key" class="form-textarea" rows="3" required placeholder="零知识证明公钥"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="commitment">承诺值 (ZKP) <span class="required">*</span></label>
+                        <textarea id="commitment" name="commitment" class="form-textarea" rows="3" required placeholder="零知识证明承诺值"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelBtn">取消</button>
+                <button type="submit" form="deviceForm" class="btn btn-primary" id="saveDeviceBtn">
+                    <i class="fas fa-save"></i> 保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模态框：设备详情 -->
+    <div class="modal" id="deviceDetailModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>设备详情</h3>
+                <button class="modal-close" id="detailModalClose">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="deviceDetailContent">
+                    <!-- 动态生成 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="detailCloseBtn">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载提示 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <p>加载中...</p>
+    </div>
+
+    <!-- Toast通知 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- JavaScript 模块 - v3.0.0 WebSocket实时通信 -->
+    <script>
+        console.log('%c===== 开始加载 JavaScript 模块 =====', 'background: #2563eb; color: white; font-size: 14px; padding: 4px 8px;');
+        console.log('加载时间:', new Date().toLocaleString());
+    </script>
+    <script src="static/js/websocket.js?v=1765600000"></script>
+    <script>console.log('✓ websocket.js v1.0.0 加载完成 (统一WebSocket管理器)', typeof WebSocketManager !== 'undefined' ? 'WebSocketManager对象已定义' : 'WebSocketManager对象未定义');</script>
+
+    <script src="static/js/api.js?v=1761011784"></script>
+    <script>console.log('✓ api.js v2.1.0 加载完成 (支持对象参数)', typeof API !== 'undefined' ? 'API对象已定义' : 'API对象未定义');</script>
+
+    <script src="static/js/threshold.js?v=1761750000"></script>
+    <script>console.log('✓ threshold.js 加载完成', typeof ThresholdManager !== 'undefined' ? 'ThresholdManager对象已定义' : 'ThresholdManager对象未定义');</script>
+
+    <script src="static/js/ui.js?v=2.0.1"></script>
+    <script>console.log('✓ ui.js 加载完成', typeof UI !== 'undefined' ? 'UI对象已定义' : 'UI对象未定义');</script>
+
+    <script src="static/js/devices.js?v=1761012903"></script>
+    <script>console.log('✓ devices.js 加载完成', typeof DeviceManager !== 'undefined' ? 'DeviceManager对象已定义' : 'DeviceManager对象未定义');</script>
+
+    <script src="static/js/statistics.js?v=1761744350"></script>
+    <script>console.log('✓ statistics.js v3.0.2 加载完成 (带调试日志)', typeof Statistics !== 'undefined' ? 'Statistics对象已定义' : 'Statistics对象未定义');</script>
+
+    <script src="static/js/alerts.js?v=1761018000"></script>
+    <script>console.log('✓ alerts.js v2.0.0 加载完成 (告警管理增强)', typeof Alerts !== 'undefined' ? 'Alerts对象已定义' : 'Alerts对象未定义');</script>
+
+    <script src="static/js/logs.js?v=1761025000"></script>
+    <script>console.log('✓ logs.js v1.0.0 加载完成 (日志记录功能)', typeof Logs !== 'undefined' ? 'Logs对象已定义' : 'Logs对象未定义');</script>
+
+    <script src="static/js/license.js?v=1761746663"></script>
+    <script>console.log('✓ license.js v1.0.1 加载完成 (许可证管理功能-修复标签)', typeof License !== 'undefined' ? 'License对象已定义' : 'License对象未定义');</script>
+
+    <script src="static/js/cabinet.js?v=1763609636"></script>
+    <script>console.log('✓ cabinet.js v1.0.7 加载完成 (储能柜管理功能 - 自动更新config.yaml中的cabinet_id)', typeof Cabinet !== 'undefined' ? 'Cabinet对象已定义' : 'Cabinet对象未定义');</script>
+
+    <script src="static/js/realtime.js?v=1761012903"></script>
+    <script>console.log('✓ realtime.js 加载完成', typeof RealtimeMonitor !== 'undefined' ? 'RealtimeMonitor对象已定义' : 'RealtimeMonitor对象未定义');</script>
+
+    <script src="static/js/vulnerability.js"></script>
+    <script>console.log('✓ vulnerability.js 加载完成', typeof Vulnerability !== 'undefined' ? 'Vulnerability对象已定义' : 'Vulnerability对象未定义');</script>
+
+    <script src="static/js/app.js?v=1761746663"></script>
+    <script>console.log('✓ app.js v2.1.0 加载完成 (告警通知集成)', typeof App !== 'undefined' ? 'App对象已定义' : 'App对象未定义');</script>
+
+    <script>
+        console.log('%c===== 所有 JavaScript 模块加载完成 =====', 'background: #10b981; color: white; font-size: 14px; padding: 4px 8px;');
+        console.log('全局对象检查:');
+        console.log('- API:', typeof API);
+        console.log('- UI:', typeof UI);
+        console.log('- DeviceManager:', typeof DeviceManager);
+        console.log('- Statistics:', typeof Statistics);
+        console.log('- Alerts:', typeof Alerts);
+        console.log('- Cabinet:', typeof Cabinet);
+        console.log('- Vulnerability:', typeof Vulnerability);
+        console.log('- App:', typeof App);
+
+        // 注意: App.init() 在 app.js 文件末尾的 IIFE 中自动调用,这里不需要再次调用
+        console.log('%c===== app.js 将自动初始化应用 =====', 'background: #3b82f6; color: white; font-size: 14px; padding: 4px 8px;');
+    </script>
+</body>
+</html>
+

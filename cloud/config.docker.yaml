@@ -1,0 +1,180 @@
+# Cloud端储能柜集群管理系统配置文件 - Docker版本
+# 本配置文件专为Docker Compose部署优化
+
+# 服务器配置
+server:
+  port: 8003
+  host: 0.0.0.0
+  mode: release  # debug, release, test
+  read_timeout: 30s
+  write_timeout: 30s
+  max_header_bytes: 1048576
+
+# 数据库配置 - Docker服务名称
+database:
+  postgres:
+    host: postgres  # Docker服务名称
+    port: 5432  # 容器内部端口
+    user: cloud_user
+    password: cloud123456
+    dbname: cloud_system
+    sslmode: disable
+    max_connections: 100
+    max_idle_connections: 10
+    connection_max_lifetime: 3600s
+  # 数据库迁移专用配置
+  migration:
+    user: postgres
+    password: postgres123
+    use_sudo: false
+  redis:
+    host: redis  # Docker服务名称
+    port: 6379
+    password: ""
+    db: 0
+    pool_size: 10
+    min_idle_conns: 5
+    dial_timeout: 5s
+    read_timeout: 3s
+    write_timeout: 3s
+
+# MQTT配置（用于Cloud端发布命令）
+# Cloud容器内部连接到cloud-mqtt服务，使用TLS端口8884（仅TLS，无明文端口）
+mqtt:
+  broker: ssl://mqtt:8884  # Docker服务名称和TLS端口
+  username: ""
+  password: ""
+  client_id: cloud-server
+  qos: 1
+  clean_session: true
+  keep_alive: 60
+  reconnect_delay: 5s
+  max_reconnect_interval: 300s
+  # TLS配置（容器内部也使用TLS加密）
+  tls:
+    enabled: true
+    ca_file: /app/configs/certs/ca.crt
+    insecure_skip_verify: true  # 测试环境跳过证书验证
+
+# Edge端MQTT配置（订阅Edge端传感器数据）
+# Cloud端通过MQTT桥接接收Edge端数据，所以这里连接的是Cloud自己的MQTT broker
+edge_mqtt:
+  enabled: true
+  broker: ssl://mqtt:8884  # Cloud容器内部连接到cloud-mqtt服务
+  username: ""
+  password: ""
+  client_id: cloud-edge-subscriber
+  qos: 1
+  clean_session: true
+  keep_alive: 60
+  reconnect_delay: 5s
+  max_reconnect_interval: 300s
+  # TLS配置（容器内部也使用TLS加密）
+  tls:
+    enabled: true
+    ca_file: /app/configs/certs/ca.crt
+    insecure_skip_verify: true  # 测试环境跳过证书验证
+
+# Edge HTTP API（用于Cloud调用Edge执行动作）
+edge_api:
+  base_url: http://localhost:8001/api/v1
+  scheme: http
+  port: 8001
+  timeout: 5s
+
+# JWT认证配置
+jwt:
+  secret: cloud-system-jwt-secret-key-2025
+  expiry: 720h  # 30天
+  refresh_expiry: 2160h  # 90天
+
+# 日志配置
+logging:
+  level: info  # Docker环境使用info级别
+  format: json
+  output: stdout  # Docker环境输出到stdout，便于日志收集
+  file_path: logs/cloud-server.log
+  max_size: 100
+  max_backups: 5
+  max_age: 30
+  compress: true
+
+# 业务参数配置
+business:
+  # 健康评分算法权重
+  health_score:
+    weights:
+      online_rate: 0.4
+      data_quality: 0.3
+      alert_severity: 0.2
+      sensor_normalcy: 0.1
+    update_interval: 5m
+  
+  # 告警配置
+  alerts:
+    offline_timeout: 300
+    severity_levels:
+      info: 0
+      warning: 1
+      error: 2
+      critical: 3
+    retention_days: 90
+  
+  # 数据同步配置
+  sync:
+    batch_size: 1000
+    sync_interval: 5m
+    timeout: 30s
+  
+  # 许可证配置
+  license:
+    cache_ttl: 3600s
+    validation_interval: 1h
+    offline_grace_period: 24h
+  
+  # 命令下发配置
+  command:
+    timeout: 30s
+    retry_count: 3
+    retry_delay: 5s
+  
+  # 前端配置（通过API暴露给前端）
+  # 使用相对路径，这样前端会通过 nginx 代理访问后端
+  frontend:
+    api_base_url: /api/v1
+    polling_interval: 5000
+    chart_refresh_interval: 30000
+    page_size: 20
+    max_page_size: 100
+    
+  # 地图配置
+  map:
+    enabled: true  # 启用地图功能
+    provider: tencent
+    tencent_map_key: "ONHBZ-K6ZCL-6UXPG-MY5O5-BVFAF-2TB5T"
+    default_center:
+      latitude: 30.287459
+      longitude: 120.153576
+    default_zoom: 11
+
+# 监控配置
+monitoring:
+  enabled: true
+  metrics_path: /metrics
+  health_check_path: /health
+  profiler_enabled: false
+  profiler_path: /debug/pprof
+
+# CORS配置（已禁用 - 前端通过nginx代理访问后端，不需要CORS）
+cors:
+  enabled: false
+
+# ABAC访问控制配置
+abac:
+  enabled: true
+  log_access: true
+  default_deny: false
+  cache_policies: true
+  cache_ttl: 300
+  trust_score_threshold: 30
+

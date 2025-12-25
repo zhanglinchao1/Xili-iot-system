@@ -1,0 +1,835 @@
+openapi: 3.0.3
+info:
+  title: Cloud端储能柜集群管理系统 API
+  version: 1.0.0
+  description: Cloud端储能柜集群管理系统的RESTful API规范
+  contact:
+    name: Cloud System Team
+
+servers:
+  - url: https://api.example.com/api/v1
+    description: 生产环境
+  - url: http://localhost:8003/api/v1
+    description: 开发环境
+
+tags:
+  - name: Cabinets
+    description: 储能柜管理
+  - name: Sensors
+    description: 传感器数据
+  - name: Licenses
+    description: 许可证管理
+  - name: Commands
+    description: 指令下发
+  - name: Alerts
+    description: 告警管理
+
+paths:
+  /cabinets:
+    get:
+      tags:
+        - Cabinets
+      summary: 查询储能柜列表
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, offline, maintenance, fault]
+        - name: location
+          in: query
+          schema:
+            type: string
+        - name: customer_name
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CabinetListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags:
+        - Cabinets
+      summary: 创建储能柜
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCabinetRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CabinetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /cabinets/{cabinet_id}:
+    get:
+      tags:
+        - Cabinets
+      summary: 查询储能柜详情
+      parameters:
+        - name: cabinet_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CabinetResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /cabinets/{cabinet_id}/sync:
+    post:
+      tags:
+        - Sensors
+      summary: 接收Edge端数据同步
+      parameters:
+        - name: cabinet_id
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncDataRequest'
+      responses:
+        '200':
+          description: 同步成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncDataResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /cabinets/{cabinet_id}/sensors/latest:
+    get:
+      tags:
+        - Sensors
+      summary: 查询储能柜最新传感器数据
+      parameters:
+        - name: cabinet_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LatestSensorDataResponse'
+
+  /devices/{device_id}/data:
+    get:
+      tags:
+        - Sensors
+      summary: 查询传感器历史数据
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: start_time
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [raw, 1min, 10min, 1h, 1d]
+            default: 1h
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoricalDataResponse'
+
+  /license/validate:
+    post:
+      tags:
+        - Licenses
+      summary: Edge端许可证验证
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LicenseValidateRequest'
+      responses:
+        '200':
+          description: 验证成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseValidateResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /licenses:
+    post:
+      tags:
+        - Licenses
+      summary: 创建许可证
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLicenseRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseResponse'
+
+  /licenses/{cabinet_id}:
+    put:
+      tags:
+        - Licenses
+      summary: 续期许可证
+      parameters:
+        - name: cabinet_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenewLicenseRequest'
+      responses:
+        '200':
+          description: 续期成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseResponse'
+
+    delete:
+      tags:
+        - Licenses
+      summary: 吊销许可证
+      parameters:
+        - name: cabinet_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeLicenseRequest'
+      responses:
+        '200':
+          description: 吊销成功
+
+  /cabinets/{cabinet_id}/alerts:
+    get:
+      tags:
+        - Alerts
+      summary: 查询告警列表
+      parameters:
+        - name: cabinet_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [info, warning, error, critical]
+        - name: resolved
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertListResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Bearer {token} 或 API Key
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+
+    SuccessResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+        message:
+          type: string
+
+    Cabinet:
+      type: object
+      required:
+        - cabinet_id
+        - location
+        - type
+        - capacity
+        - mac_address
+        - status
+      properties:
+        cabinet_id:
+          type: string
+        location:
+          type: string
+        type:
+          type: string
+        capacity:
+          type: number
+        mac_address:
+          type: string
+        status:
+          type: string
+          enum: [online, offline, maintenance, fault]
+        customer_name:
+          type: string
+        install_date:
+          type: string
+          format: date
+        device_count:
+          type: integer
+        online_device_count:
+          type: integer
+        health_score:
+          type: number
+        last_sync_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    CreateCabinetRequest:
+      type: object
+      required:
+        - cabinet_id
+        - location
+        - type
+        - capacity
+        - mac_address
+      properties:
+        cabinet_id:
+          type: string
+        location:
+          type: string
+        type:
+          type: string
+        capacity:
+          type: number
+        mac_address:
+          type: string
+        customer_name:
+          type: string
+        install_date:
+          type: string
+          format: date
+
+    CabinetResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Cabinet'
+
+    CabinetListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                total:
+                  type: integer
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Cabinet'
+
+    SyncDataRequest:
+      type: object
+      required:
+        - cabinet_id
+        - timestamp
+      properties:
+        cabinet_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        sensor_data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SensorDataPoint'
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertData'
+
+    SensorDataPoint:
+      type: object
+      required:
+        - device_id
+        - sensor_type
+        - value
+        - unit
+        - timestamp
+      properties:
+        id:
+          type: integer
+        device_id:
+          type: string
+        sensor_type:
+          type: string
+        value:
+          type: number
+        unit:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        quality:
+          type: integer
+        synced:
+          type: boolean
+
+    AlertData:
+      type: object
+      required:
+        - device_id
+        - alert_type
+        - severity
+        - message
+        - timestamp
+      properties:
+        id:
+          type: integer
+        device_id:
+          type: string
+        alert_type:
+          type: string
+        severity:
+          type: string
+        message:
+          type: string
+        value:
+          type: number
+        threshold:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+        resolved:
+          type: boolean
+
+    SyncDataResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                synced_count:
+                  type: object
+                  properties:
+                    sensor_data:
+                      type: integer
+                    alerts:
+                      type: integer
+                next_sync_recommended:
+                  type: string
+                  format: date-time
+
+    LatestSensorDataResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                cabinet_id:
+                  type: string
+                timestamp:
+                  type: string
+                  format: date-time
+                sensors:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/SensorReading'
+
+    SensorReading:
+      type: object
+      properties:
+        sensor_type:
+          type: string
+        device_id:
+          type: string
+        value:
+          type: number
+        unit:
+          type: string
+        status:
+          type: string
+        quality:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+
+    HistoricalDataResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                device_id:
+                  type: string
+                sensor_type:
+                  type: string
+                unit:
+                  type: string
+                interval:
+                  type: string
+                data_points:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DataPoint'
+                statistics:
+                  $ref: '#/components/schemas/Statistics'
+
+    DataPoint:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        value:
+          type: number
+        min:
+          type: number
+        max:
+          type: number
+        count:
+          type: integer
+
+    Statistics:
+      type: object
+      properties:
+        avg:
+          type: number
+        min:
+          type: number
+        max:
+          type: number
+        total_count:
+          type: integer
+
+    LicenseValidateRequest:
+      type: object
+      required:
+        - cabinet_id
+        - mac_address
+      properties:
+        cabinet_id:
+          type: string
+        mac_address:
+          type: string
+        version:
+          type: string
+
+    LicenseValidateResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                valid:
+                  type: boolean
+                license:
+                  $ref: '#/components/schemas/License'
+                cache_ttl:
+                  type: integer
+
+    License:
+      type: object
+      properties:
+        license_id:
+          type: string
+        cabinet_id:
+          type: string
+        mac_address:
+          type: string
+        max_devices:
+          type: integer
+        expires_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+
+    CreateLicenseRequest:
+      type: object
+      required:
+        - cabinet_id
+        - mac_address
+        - expires_at
+      properties:
+        cabinet_id:
+          type: string
+        mac_address:
+          type: string
+        max_devices:
+          type: integer
+        expires_at:
+          type: string
+          format: date-time
+        permissions:
+          type: array
+          items:
+            type: string
+
+    RenewLicenseRequest:
+      type: object
+      required:
+        - extend_days
+        - operator
+      properties:
+        extend_days:
+          type: integer
+        operator:
+          type: string
+        note:
+          type: string
+
+    RevokeLicenseRequest:
+      type: object
+      required:
+        - reason
+        - operator
+      properties:
+        reason:
+          type: string
+        operator:
+          type: string
+
+    LicenseResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/License'
+
+    AlertListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                total:
+                  type: integer
+                unresolved_count:
+                  type: integer
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Alert'
+
+    Alert:
+      type: object
+      properties:
+        alert_id:
+          type: integer
+        cabinet_id:
+          type: string
+        device_id:
+          type: string
+        alert_type:
+          type: string
+        severity:
+          type: string
+        message:
+          type: string
+        value:
+          type: number
+        threshold:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+        resolved:
+          type: boolean
+        resolved_at:
+          type: string
+          format: date-time
+
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Unauthorized:
+      description: 未认证
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Forbidden:
+      description: 无权限
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Conflict:
+      description: 资源冲突
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    InternalError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+

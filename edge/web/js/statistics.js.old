@@ -1,0 +1,177 @@
+/**
+ * 统计分析模块
+ * 处理传感器数据统计与分析功能
+ */
+
+const Statistics = {
+    currentFilters: {
+        device_id: '',
+        sensor_type: '',
+        period: '24h'
+    },
+
+    /**
+     * 初始化统计分析模块
+     */
+    async init() {
+        console.log('[Statistics] 初始化统计分析模块');
+
+        // 加载设备列表到下拉框
+        await this.loadDevicesList();
+
+        // 绑定事件
+        this.bindEvents();
+    },
+
+    /**
+     * 加载设备列表
+     */
+    async loadDevicesList() {
+        try {
+            const devices = await API.getDevices();
+            const deviceSelect = document.getElementById('statsDeviceId');
+
+            // 清空现有选项（保留"全部设备"）
+            deviceSelect.innerHTML = '<option value="">全部设备</option>';
+
+            // 添加设备选项
+            devices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.device_id;
+                option.textContent = `${device.device_id} (${this.getSensorTypeName(device.sensor_type)})`;
+                deviceSelect.appendChild(option);
+            });
+
+            console.log(`[Statistics] 已加载 ${devices.length} 个设备到下拉框`);
+        } catch (error) {
+            console.error('[Statistics] 加载设备列表失败:', error);
+            UI.showToast('加载设备列表失败: ' + error.message, 'error');
+        }
+    },
+
+    /**
+     * 绑定事件监听器
+     */
+    bindEvents() {
+        // 统计查询表单提交
+        const filterForm = document.getElementById('statisticsFilterForm');
+        if (filterForm) {
+            filterForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.queryStatistics();
+            });
+        }
+    },
+
+    /**
+     * 查询统计数据
+     */
+    async queryStatistics() {
+        try {
+            UI.showLoading();
+
+            // 获取筛选条件
+            this.currentFilters = {
+                device_id: document.getElementById('statsDeviceId').value,
+                sensor_type: document.getElementById('statsSensorType').value,
+                period: document.getElementById('statsPeriod').value
+            };
+
+            console.log('[Statistics] 查询统计:', this.currentFilters);
+
+            // 调用API获取统计数据
+            const stats = await API.getStatistics(
+                this.currentFilters.device_id,
+                this.currentFilters.sensor_type,
+                this.currentFilters.period
+            );
+
+            console.log('[Statistics] 统计结果:', stats);
+
+            // 显示统计结果
+            this.renderStatistics(stats);
+
+        } catch (error) {
+            console.error('[Statistics] 查询统计失败:', error);
+            UI.showToast('查询统计失败: ' + error.message, 'error');
+
+            // 显示空状态
+            document.getElementById('statsResultCard').style.display = 'none';
+            document.getElementById('statsEmptyState').style.display = 'flex';
+        } finally {
+            UI.hideLoading();
+        }
+    },
+
+    /**
+     * 渲染统计结果
+     */
+    renderStatistics(stats) {
+        // 隐藏空状态，显示结果卡片
+        document.getElementById('statsEmptyState').style.display = 'none';
+        document.getElementById('statsResultCard').style.display = 'block';
+
+        // 更新统计信息
+        const deviceInfo = this.currentFilters.device_id || '全部设备';
+        const sensorInfo = this.currentFilters.sensor_type ?
+            this.getSensorTypeName(this.currentFilters.sensor_type) : '全部类型';
+
+        document.getElementById('statsInfoDevice').textContent =
+            `${deviceInfo} - ${sensorInfo}`;
+
+        document.getElementById('statsInfoPeriod').textContent =
+            this.getPeriodName(this.currentFilters.period);
+
+        // 更新统计数值
+        document.getElementById('statsCount').textContent = stats.count || 0;
+        document.getElementById('statsMin').textContent =
+            stats.min_value !== undefined ? stats.min_value.toFixed(2) : '-';
+        document.getElementById('statsMax').textContent =
+            stats.max_value !== undefined ? stats.max_value.toFixed(2) : '-';
+        document.getElementById('statsAvg').textContent =
+            stats.avg_value !== undefined ? stats.avg_value.toFixed(2) : '-';
+
+        // 更新时间范围
+        if (stats.start_time && stats.end_time) {
+            const startTime = new Date(stats.start_time).toLocaleString('zh-CN');
+            const endTime = new Date(stats.end_time).toLocaleString('zh-CN');
+            document.getElementById('statsTimeRange').textContent = `${startTime} ~ ${endTime}`;
+        }
+
+        // 如果没有数据，显示提示
+        if (stats.count === 0) {
+            UI.showToast('该时间段内没有数据', 'warning');
+        } else {
+            UI.showToast(`查询成功，共 ${stats.count} 条数据`, 'success');
+        }
+    },
+
+    /**
+     * 获取传感器类型中文名称
+     */
+    getSensorTypeName(type) {
+        const names = {
+            'co2': 'CO2传感器',
+            'co': 'CO传感器',
+            'smoke': '烟雾传感器',
+            'liquid_level': '液位传感器',
+            'conductivity': '电导率传感器',
+            'temperature': '温度传感器',
+            'flow': '流速传感器'
+        };
+        return names[type] || type;
+    },
+
+    /**
+     * 获取周期中文名称
+     */
+    getPeriodName(period) {
+        const names = {
+            '1h': '最近1小时',
+            '24h': '最近24小时',
+            '7d': '最近7天',
+            '30d': '最近30天'
+        };
+        return names[period] || period;
+    }
+};

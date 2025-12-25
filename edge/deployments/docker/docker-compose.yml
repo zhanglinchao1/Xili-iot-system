@@ -1,0 +1,53 @@
+# Edge系统Docker Compose配置
+# 本地开发环境部署
+
+version: '3.8'
+
+services:
+  edge:
+    image: edge-system:latest
+    container_name: edge-system
+    restart: unless-stopped
+    
+    # 使用host网络模式，这样:
+    # 1. Mosquitto可以监听宿主机的8883端口
+    # 2. 可以访问Cloud的MQTT（localhost:18883）
+    # 3. orangepi-gateway可以直接访问Edge
+    network_mode: host
+    
+    # 环境变量
+    environment:
+      - TZ=Asia/Shanghai
+    
+    # 挂载卷
+    volumes:
+      # 配置文件
+      - ../../configs/config.yaml:/app/configs/config.yaml:ro
+      - ./mosquitto_docker.conf:/app/configs/mosquitto_tls.conf:ro
+      
+      # 证书
+      - ../../configs/certs:/app/configs/certs:ro
+      
+      # 许可证文件
+      - ../../configs/license.lic:/app/configs/license.lic:ro
+      - ../../configs/vendor_pubkey.pem:/app/configs/vendor_pubkey.pem:ro
+      
+      # ZKP密钥
+      - ../../auth_verifying.key:/app/auth_verifying.key:ro
+      
+      # 数据持久化
+      - edge_data:/app/data
+      - edge_logs:/app/logs
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  edge_data:
+    name: edge-data
+  edge_logs:
+    name: edge-logs

@@ -1,0 +1,106 @@
+# Cloud端后端服务 Dockerfile
+# 使用多阶段构建，减小镜像体积
+
+# 阶段1: 构建阶段
+# 使用镜像代理加速拉取基础镜像
+FROM nn7fm5xf4cl9hj.xuanyuan.run/golang:1.24-alpine AS builder
+
+# 配置 Go 代理（使用多个国内镜像源，增加成功率）
+# 备选顺序：goproxy.cn -> 阿里云 -> 七牛云 -> 直接连接
+ENV GOPROXY=https://goproxy.cn,https://mirrors.aliyun.com/goproxy/,https://goproxy.qihoo.net,direct
+ENV GOSUMDB=sum.golang.google.cn
+ENV GO111MODULE=on
+# 允许私有模块和sumdb验证失败时继续
+ENV GONOPROXY=
+ENV GONOSUMDB=
+ENV GOPRIVATE=
+
+# 设置工作目录
+WORKDIR /build
+
+# 安装必要的构建工具
+# 注意：已有完整源代码，无需 git；Go 构建不依赖 make
+# RUN apk add --no-cache git make
+
+# 复制go mod文件
+COPY go.mod go.sum ./
+
+# 下载依赖（利用Docker缓存层）
+# 使用重试机制，如果第一个代理失败会自动尝试下一个
+# 设置超时时间，避免长时间等待
+RUN go env -w GOPROXY=https://goproxy.cn,https://mirrors.aliyun.com/goproxy/,https://goproxy.qihoo.net,direct && \
+    go env -w GOSUMDB=sum.golang.google.cn && \
+    go mod download || \
+    (echo "第一次下载失败，尝试使用direct模式..." && \
+     go env -w GOPROXY=direct && \
+     go mod download) || \
+    (echo "direct模式失败，尝试使用goproxy.io..." && \
+     go env -w GOPROXY=https://goproxy.io,direct && \
+     go mod download) || \
+    (echo "所有代理都失败，尝试使用七牛云代理..." && \
+     go env -w GOPROXY=https://goproxy.qihoo.net,direct && \
+     go mod download)
+
+# 复制源代码
+COPY . .
+
+# 构建应用
+# CGO_ENABLED=0 禁用CGO，生成静态二进制文件
+# -ldflags="-s -w" 减小二进制文件大小
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-s -w" \
+    -o cloud-server \
+    ./cmd/cloud-server/main.go
+
+# 阶段2: 运行阶段
+# 使用镜像代理加速拉取基础镜像
+FROM nn7fm5xf4cl9hj.xuanyuan.run/alpine:latest
+
+# 配置Alpine国内镜像源(使用http)
+RUN sed -i 's/https/http/g' /etc/apk/repositories && \
+    sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
+# 安装必要的运行时依赖
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    curl \
+    && update-ca-certificates
+
+# 设置时区
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# 创建非root用户
+RUN addgroup -g 1000 cloud && \
+    adduser -D -u 1000 -G cloud cloud
+
+# 设置工作目录
+WORKDIR /app
+
+# 从构建阶段复制二进制文件
+COPY --from=builder /build/cloud-server /app/cloud-server
+
+# 复制配置文件
+COPY config.yaml /app/config.yaml
+
+# 复制数据库迁移文件
+COPY migrations /app/migrations
+
+# 创建日志和配置目录
+RUN mkdir -p /app/logs /app/configs /app/configs/certs && \
+    chown -R cloud:cloud /app
+
+# 切换到非root用户
+USER cloud
+
+# 暴露端口
+EXPOSE 8003
+
+# 健康检查（使用curl发送GET请求）
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -sf http://localhost:8003/health | grep -q "ok" || exit 1
+
+# 启动应用
+CMD ["/app/cloud-server"]
+

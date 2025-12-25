@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edge配置API测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .result {
+            background: #f9f9f9;
+            padding: 15px;
+            border-left: 4px solid #4CAF50;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .error {
+            border-left-color: #f44336;
+            background: #ffebee;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .success { color: #4CAF50; }
+        .error-text { color: #f44336; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Edge端储能柜管理API测试</h1>
+    
+    <div class="test-section">
+        <h2>1. 获取配置 (GET /api/v1/config)</h2>
+        <button onclick="testGetConfig()">测试</button>
+        <div id="config-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. 更新配置 (PUT /api/v1/config)</h2>
+        <input type="text" id="endpoint" placeholder="Cloud端地址 (格式: http://IP:端口/api/v1)" value="" style="width: 400px; padding: 8px;">
+        <label><input type="checkbox" id="enabled" checked> 启用</label>
+        <button onclick="testUpdateConfig()">测试更新</button>
+        <div id="update-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. 获取MAC地址 (GET /api/v1/system/mac)</h2>
+        <button onclick="testGetMAC()">测试</button>
+        <div id="mac-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. 测试Cloud连接 (GET Cloud/health)</h2>
+        <button onclick="testCloudConnection()">测试</button>
+        <div id="cloud-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. 注册到Cloud端 (POST Cloud/cabinets/register)</h2>
+        <input type="text" id="cabinet_id" placeholder="储能柜ID" value="TEST-CAB-XXX" style="width: 200px; padding: 8px;">
+        <input type="text" id="cabinet_name" placeholder="名称" value="测试储能柜" style="width: 200px; padding: 8px;">
+        <button onclick="testRegister()">测试注册</button>
+        <div id="register-result" class="result"></div>
+    </div>
+
+    <script>
+        // API基础URL - 后端API运行在8001端口，前端在8000端口
+        const API_BASE_URL = 'http://localhost:8001';
+
+        async function testGetConfig() {
+            const resultDiv = document.getElementById('config-result');
+            resultDiv.textContent = '正在测试...';
+            resultDiv.className = 'result';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/config`);
+                const data = await response.json();
+                
+                resultDiv.className = 'result';
+                resultDiv.textContent = `✅ 成功 (HTTP ${response.status})\n\n` + JSON.stringify(data, null, 2);
+                
+                // 显示解析后的配置
+                if (data.cloud) {
+                    const config = data.cloud;
+                    resultDiv.textContent += `\n\n📋 配置解析:\n`;
+                    resultDiv.textContent += `• 启用: ${config.enabled ? '✓ 是' : '✗ 否'} (类型: ${typeof config.enabled})\n`;
+                    resultDiv.textContent += `• 端点: ${config.endpoint || '未设置'}\n`;
+                    resultDiv.textContent += `• Cabinet ID: ${config.cabinet_id || '未设置'}\n`;
+                    resultDiv.textContent += `• API Key: ${config.api_key || '未设置'}\n`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ 错误: ${error.message}`;
+            }
+        }
+
+        async function testUpdateConfig() {
+            const resultDiv = document.getElementById('update-result');
+            const endpoint = document.getElementById('endpoint').value;
+            const enabled = document.getElementById('enabled').checked;
+            
+            resultDiv.textContent = '正在更新...';
+            resultDiv.className = 'result';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/config`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cloud: { enabled, endpoint }
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result';
+                    resultDiv.textContent = `✅ 成功 (HTTP ${response.status})\n\n` + JSON.stringify(data, null, 2);
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ 失败 (HTTP ${response.status})\n\n` + JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ 错误: ${error.message}`;
+            }
+        }
+
+        async function testGetMAC() {
+            const resultDiv = document.getElementById('mac-result');
+            resultDiv.textContent = '正在获取...';
+            resultDiv.className = 'result';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/system/mac`);
+                const data = await response.json();
+                
+                resultDiv.className = 'result';
+                resultDiv.textContent = `✅ 成功 (HTTP ${response.status})\n\nMAC地址: ${data.mac_address}`;
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ 错误: ${error.message}`;
+            }
+        }
+
+        async function testCloudConnection() {
+            const resultDiv = document.getElementById('cloud-result');
+            const endpointInput = document.getElementById('endpoint');
+            const endpoint = endpointInput.value.trim();
+
+            if (!endpoint) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ 请先输入Cloud端地址';
+                return;
+            }
+
+            resultDiv.textContent = '正在测试...';
+            resultDiv.className = 'result';
+
+            try {
+                // 构建健康检查URL (去掉 /api/v1 后缀，添加 /health)
+                const baseUrl = endpoint.replace(/\/api\/v[0-9]+\/?$/, '');
+                const healthUrl = baseUrl + '/health';
+
+                const startTime = performance.now();
+                const response = await fetch(healthUrl);
+                const endTime = performance.now();
+                const latency = Math.round(endTime - startTime);
+                
+                const data = await response.json();
+                
+                resultDiv.className = 'result';
+                resultDiv.textContent = `✅ 连接成功 (HTTP ${response.status})\n\n`;
+                resultDiv.textContent += `延迟: ${latency}ms\n`;
+                resultDiv.textContent += `服务: ${data.service}\n`;
+                resultDiv.textContent += `状态: ${data.status}`;
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ 连接失败: ${error.message}`;
+            }
+        }
+
+        async function testRegister() {
+            const resultDiv = document.getElementById('register-result');
+            const cabinetId = document.getElementById('cabinet_id').value;
+            const cabinetName = document.getElementById('cabinet_name').value;
+            const endpointInput = document.getElementById('endpoint');
+            const endpoint = endpointInput.value.trim();
+
+            if (!cabinetId || !cabinetName) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ 请填写储能柜ID和名称';
+                return;
+            }
+
+            if (!endpoint) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ 请先输入Cloud端地址';
+                return;
+            }
+
+            resultDiv.textContent = '正在注册...';
+            resultDiv.className = 'result';
+
+            try {
+                // 先获取MAC地址
+                const macResponse = await fetch(`${API_BASE_URL}/api/v1/system/mac`);
+                const macData = await macResponse.json();
+                const macAddress = macData.mac_address;
+
+                // 注册到Cloud
+                const response = await fetch(`${endpoint}/cabinets/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cabinet_id: cabinetId,
+                        name: cabinetName,
+                        location: '测试环境',
+                        capacity_kwh: 100,
+                        mac_address: macAddress
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result';
+                    resultDiv.textContent = `✅ 注册成功！\n\n` + JSON.stringify(data, null, 2);
+                    
+                    if (data.data && data.data.api_key) {
+                        resultDiv.textContent += `\n\n⚠️ 重要: 请立即保存以下凭证到 configs/config.yaml:\n`;
+                        resultDiv.textContent += `\napi_key: "${data.data.api_key}"\n`;
+                        resultDiv.textContent += `api_secret: "${data.data.api_secret}"\n`;
+                        resultDiv.textContent += `\n注意: api_secret只显示一次，请妥善保管！`;
+                    }
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ 注册失败 (HTTP ${response.status})\n\n` + JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ 错误: ${error.message}`;
+            }
+        }
+
+        // 页面加载时自动测试配置API
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('测试页面已加载');
+            testGetConfig();
+        });
+    </script>
+</body>
+</html>
+

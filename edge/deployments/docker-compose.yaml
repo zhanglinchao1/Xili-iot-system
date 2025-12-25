@@ -1,0 +1,145 @@
+# Edge系统Docker Compose配置
+# 用于本地开发和测试部署
+
+version: '3.8'
+
+services:
+  # Edge主服务
+  edge:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
+    container_name: edge-system
+    restart: unless-stopped
+    ports:
+      - "8080:8080"    # HTTP API端口
+      - "9090:9090"    # 监控指标端口
+    volumes:
+      - ./data:/app/data                    # 数据持久化
+      - ./logs:/app/logs                    # 日志持久化
+      - ./configs:/app/configs              # 配置文件
+    environment:
+      - GIN_MODE=release
+      - CLOUD_API_KEY=${CLOUD_API_KEY:-your-api-key}
+      - CLOUD_ENDPOINT=${CLOUD_ENDPOINT:-http://150.158.102.52:8003/api/v1}
+      - MQTT_BROKER_ADDRESS=${MQTT_BROKER_ADDRESS:-ssl://150.158.102.52:8884}
+      - EDGE_DB_PATH=/app/data/edge.db
+      # Cloud端MQTT配置（确保与Edge使用相同broker）
+      - MQTT_USERNAME=${MQTT_USERNAME:-edge-server}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-edge-server-password}
+    networks:
+      - edge-network
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Prometheus监控
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: edge-prometheus
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - edge-network
+
+  # Grafana可视化
+  grafana:
+    image: grafana/grafana:latest
+    container_name: edge-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - edge-network
+    depends_on:
+      - prometheus
+
+  # Redis缓存（可选）
+  redis:
+    image: redis:7-alpine
+    container_name: edge-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - edge-network
+
+  # 云端MQTT Broker（用于Cloud-Edge通信）
+  # 重要：Cloud和Edge必须连接到同一个MQTT broker才能通信
+  cloud-mqtt:
+    image: nn7fm5xf4cl9hj.xuanyuan.run/eclipse-mosquitto:2.0
+    container_name: cloud-mqtt-broker
+    restart: unless-stopped
+    ports:
+      - "1883:1883"  # MQTT端口
+      - "8884:8884"  # MQTT SSL端口
+      - "9001:9001"  # WebSocket端口
+    volumes:
+      - ./mosquitto_cloud.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto_cloud_data:/mosquitto/data
+      - ./mosquitto_cloud_log:/mosquitto/log
+      - ./certs:/mosquitto/certs:ro
+    networks:
+      - cloud-network
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "test", "-C", "1", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx反向代理（可选）
+  nginx:
+    image: nginx:alpine
+    container_name: edge-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    networks:
+      - edge-network
+    depends_on:
+      - edge
+
+# 网络配置
+networks:
+  edge-network:
+    driver: bridge
+  cloud-network:
+    driver: bridge
+
+# 数据卷
+volumes:
+  prometheus_data:
+  grafana_data:
+  redis_data:
+  mosquitto_cloud_data:
+  mosquitto_cloud_log:

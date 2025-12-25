@@ -1,0 +1,124 @@
+server:
+    host: 0.0.0.0
+    port: 8001
+    mode: release
+auth:
+    challenge_ttl: 1m0s
+    session_ttl: 24h0m0s
+    max_retry: 3
+    zkp:
+        circuit_path: ./internal/zkp/keys
+        proving_scheme: groth16
+        verifying_key_path: ./auth_verifying.key
+device:
+    heartbeat_interval: 30s
+    offline_timeout: 5m0s
+    max_devices: 100
+    supported_sensors:
+        - co2
+        - co
+        - smoke
+        - liquid_level
+        - conductivity
+        - temperature
+        - flow
+data:
+    collect_interval: 1m0s
+    sync_interval: 5m0s
+    retention_days: 90
+    batch_size: 100
+    buffer_size: 10000
+database:
+    driver: sqlite3
+    path: ./data/edge.db
+    max_connections: 10
+    max_idle_connections: 5
+cloud:
+    enabled: true
+    endpoint: http://localhost:8003/api/v1
+    api_key: ck_iPbLXZBIgodlaxaLP7jD3NJ9RpEUQZlrkGTyGq_7k58
+    admin_token: ""
+    cabinet_id: CABINET-001
+    timeout: 30s
+    retry_count: 3
+    retry_interval: 5s
+    cabinet_name: 一号储能柜
+    location: 杭州西力智能科技股份有限公司-东门
+    latitude: 30.12992
+    longitude: 120.096194
+    capacity_kwh: 120
+    device_model: ESC-V1.0
+registration:
+    enabled: true
+    token: ""
+    mac_address: ""
+alert:
+    enabled: true
+    thresholds:
+        co2_max: 5000
+        co_max: 50
+        smoke_max: 1000
+        liquid_level_min: 0
+        liquid_level_max: 900
+        conductivity_min: 0
+        conductivity_max: 10
+        temperature_min: -10
+        temperature_max: 60
+        flow_min: 0
+        flow_max: 100
+license:
+    enabled: true
+    path: ./configs/license.lic
+    pubkey_path: ./configs/vendor_pubkey.pem
+    grace_period: 72h0m0s
+log:
+    level: info
+    output: file
+    file_path: ./logs/edge.log
+    max_size: 100
+    max_backups: 7
+    max_age: 30
+    compress: true
+monitoring:
+    metrics_enabled: true
+    metrics_port: 9090
+    health_check_interval: 1m0s
+mqtt:
+    enabled: true
+    broker_address: ssl://150.158.102.52:8884
+    client_id: edge-CABINET-001
+    username: ""
+    password: ""
+    qos: 1
+    keep_alive: 60
+    clean_session: true
+    reconnect_interval: 5s
+    max_reconnect_attempts: 10
+    tls:
+        enabled: true
+        insecure_skip_verify: true
+        ca_file: ./configs/certs/ca.crt
+        cert_file: ./configs/certs/client.crt
+        key_file: ./configs/certs/client.key
+vulnerability:
+    enabled: true
+    assessment_interval: 1m0s
+    score_change_threshold: 5
+    history_retention: 168h0m0s
+    weights:
+        communication: 0.48
+        config_security: 0.52
+        data_anomaly: 0
+    communication:
+        latency_threshold_ms: 2000
+        packet_loss_threshold: 0.05
+        reconnect_threshold_per_hour: 10
+    data_anomaly:
+        missing_rate_threshold: 0.1
+        abnormal_value_threshold: 0.15
+        alert_frequency_threshold: 20
+abac:
+    enabled: true
+map:
+    tencent_map_key: ONHBZ-K6ZCL-6UXPG-MY5O5-BVFAF-2TB5T
+    enabled: true

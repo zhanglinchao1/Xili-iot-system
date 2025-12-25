@@ -1,0 +1,153 @@
+version: '3.8'
+
+services:
+  # PostgreSQL数据库服务 (TimescaleDB)
+  postgres:
+    image: nn7fm5xf4cl9hj.xuanyuan.run/timescale/timescaledb:latest-pg14
+    container_name: cloud-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: cloud_system
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh:ro  # 数据库初始化脚本
+      - ./migrations:/docker-entrypoint-initdb.d/migrations:ro  # 迁移脚本目录（可选，应用会自动执行）
+    ports:
+      - "5433:5432"  # 使用 5433 避免与系统 PostgreSQL 冲突
+    networks:
+      - cloud-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis缓存服务（可选）
+  redis:
+    image: nn7fm5xf4cl9hj.xuanyuan.run/redis:7-alpine
+    container_name: cloud-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - cloud-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # MQTT Broker服务 (Broker #2 - Cloud端) - 仅TLS
+  # 端口分配: Cloud使用8884端口，Edge使用8883端口
+  mqtt:
+    image: nn7fm5xf4cl9hj.xuanyuan.run/eclipse-mosquitto:2.0
+    container_name: cloud-mqtt
+    volumes:
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./configs/certs:/mosquitto/certs:ro  # TLS证书挂载
+      - mqtt_data:/mosquitto/data
+      - mqtt_logs:/mosquitto/log
+    ports:
+      - "8884:8884"   # MQTT TLS端口 (Cloud专用，仅加密)
+    networks:
+      - cloud-network
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 8884 --cafile /mosquitto/certs/ca.crt --insecure -t '$$SYS/#' -C 1 | head -1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # 后端服务
+  backend:
+    image: cloud-backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: cloud-backend
+    ports:
+      - "8003:8003"
+    networks:
+      - cloud-network
+    environment:
+      # 数据库配置(通过环境变量覆盖config.yaml)
+      - CLOUD_CONFIG_PATH=/app/config.yaml
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=cloud_user
+      - DB_PASSWORD=cloud123456
+      - DB_NAME=cloud_system
+      # Redis配置
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # MQTT配置 - 与 config.docker.yaml 保持一致，使用TLS
+      # Cloud端使用8884端口（TLS加密）
+      - MQTT_BROKER=${MQTT_BROKER:-ssl://mqtt:8884}
+      - MQTT_TLS_ENABLED=${MQTT_TLS_ENABLED:-true}
+      # Edge MQTT配置(用于订阅Edge端数据)
+      - EDGE_MQTT_BROKER=${EDGE_MQTT_BROKER:-ssl://mqtt:8884}
+      - EDGE_MQTT_ENABLED=${EDGE_MQTT_ENABLED:-true}
+      # 服务器配置
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8003
+      - SERVER_MODE=release
+    volumes:
+      - ./config.docker.yaml:/app/config.yaml:ro
+      - ./migrations:/app/migrations:ro
+      - ./configs:/app/configs:ro
+      - backend_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mqtt:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # 前端服务
+  frontend:
+    image: cloud-frontend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        - VITE_API_BASE_URL=/api/v1
+    container_name: cloud-frontend
+    ports:
+      - "8002:8002"
+    networks:
+      - cloud-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+networks:
+  cloud-network:
+    driver: bridge
+    name: cloud-network
+
+volumes:
+  postgres_data:
+    name: cloud-postgres-data
+  redis_data:
+    name: cloud-redis-data
+  mqtt_data:
+    name: cloud-mqtt-data
+  mqtt_logs:
+    name: cloud-mqtt-logs
+  backend_logs:
+    name: cloud-backend-logs
+

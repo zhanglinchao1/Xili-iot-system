@@ -1,0 +1,95 @@
+<template>
+  <el-tag :type="statusType" :size="size">
+    {{ statusText }}
+  </el-tag>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue';
+
+interface Props {
+  status: string;
+  type?: 'cabinet' | 'device' | 'license' | 'command' | 'alert';
+  size?: 'large' | 'default' | 'small';
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  type: 'cabinet',
+  size: 'default',
+});
+
+// 状态类型映射
+const statusTypeMap: Record<string, Record<string, 'success' | 'info' | 'warning' | 'danger'>> = {
+  cabinet: {
+    online: 'success',
+    offline: 'info',
+    maintenance: 'warning',
+    error: 'danger',
+  },
+  device: {
+    active: 'success',
+    inactive: 'info',
+    error: 'danger',
+  },
+  license: {
+    active: 'success',
+    expired: 'danger',
+    revoked: 'warning',
+  },
+  command: {
+    pending: 'info',
+    sent: 'warning',
+    completed: 'success',
+    failed: 'danger',
+    timeout: 'danger',
+  },
+  alert: {
+    info: 'info',
+    warning: 'warning',
+    error: 'danger',
+    critical: 'danger',
+  },
+};
+
+// 状态文本映射
+const statusTextMap: Record<string, Record<string, string>> = {
+  cabinet: {
+    online: '在线',
+    offline: '离线',
+    maintenance: '维护中',
+    error: '故障',
+  },
+  device: {
+    active: '活跃',
+    inactive: '未激活',
+    error: '故障',
+  },
+  license: {
+    active: '有效',
+    expired: '已过期',
+    revoked: '已吊销',
+  },
+  command: {
+    pending: '等待中',
+    sent: '已发送',
+    completed: '已完成',
+    failed: '失败',
+    timeout: '超时',
+  },
+  alert: {
+    info: '信息',
+    warning: '警告',
+    error: '错误',
+    critical: '严重',
+  },
+};
+
+const statusType = computed(() => {
+  return statusTypeMap[props.type]?.[props.status] || 'info';
+});
+
+const statusText = computed(() => {
+  return statusTextMap[props.type]?.[props.status] || props.status;
+});
+</script>
+

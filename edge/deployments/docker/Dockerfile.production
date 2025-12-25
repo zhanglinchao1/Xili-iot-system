@@ -1,0 +1,93 @@
+# ============================================
+# Edge 系统生产环境 Dockerfile
+# 使用 Debian 基础镜像，与 orangepi 项目保持一致
+# 不包含源码，只包含编译后的二进制文件
+# ============================================
+
+FROM debian:bookworm-slim
+
+# 设置工作目录
+WORKDIR /app
+
+# 配置国内镜像源（阿里云），解决网络访问问题
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
+# 安装运行时依赖
+# - ca-certificates: HTTPS 连接需要
+# - mosquitto: MQTT Broker
+# - mosquitto-clients: MQTT 命令行工具
+# - wget: 健康检查使用
+# - iproute2: ss 命令，用于检测端口监听状态
+# - procps: pgrep/pkill 命令，用于进程管理
+# - python3: 前端 HTTP 服务器
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    mosquitto \
+    mosquitto-clients \
+    wget \
+    iproute2 \
+    procps \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 设置时区为中国
+ENV TZ=Asia/Shanghai
+RUN ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# 创建必要的目录
+RUN mkdir -p \
+    /app/configs \
+    /app/data \
+    /app/logs \
+    /app/logs/mosquitto \
+    /app/logs/mosquitto/data
+
+# 复制编译好的二进制文件（从宿主机）
+# 注意：这个文件需要提前在宿主机编译好
+COPY edge /app/edge
+
+# 复制配置文件
+COPY configs/config.yaml /app/configs/config.yaml
+COPY configs/mosquitto_tls_container.conf /app/configs/mosquitto_tls.conf
+
+# 复制证书文件（如果需要）
+COPY configs/certs /app/configs/certs
+
+# 复制前端文件
+COPY web /app/web
+
+# 复制 ZKP 验证密钥
+COPY auth_verifying.key /app/auth_verifying.key
+
+# 复制许可证文件 (如果启用许可证检查)
+COPY configs/license.lic /app/configs/license.lic
+COPY configs/vendor_pubkey.pem /app/configs/vendor_pubkey.pem
+
+# 复制启动脚本 (build.sh 已复制到构建上下文根目录)
+COPY entrypoint.sh /app/entrypoint.sh
+
+# 设置可执行权限
+RUN chmod +x /app/edge /app/entrypoint.sh
+
+# 创建非 root 用户（安全最佳实践）
+# 注意: Mosquitto 需要绑定端口和创建日志文件,暂时使用 root 用户运行
+# 生产环境应该配置proper权限后使用非 root 用户
+RUN groupadd -g 1000 edge && \
+    useradd -u 1000 -g edge -s /bin/bash -m edge && \
+    chown -R edge:edge /app
+
+# 暂时不切换用户,使用 root 运行以避免权限问题
+# USER edge
+
+# 暴露端口
+# 8001: Edge HTTP API
+# 8000: Edge 前端 (如果需要)
+# 8883: Mosquitto MQTT (TLS)
+# 9090: Prometheus metrics (可选)
+EXPOSE 8001 8000 8883 9090
+
+# 健康检查（使用GET请求而不是HEAD）
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 -O /dev/null http://localhost:8001/health || exit 1
+
+ENTRYPOINT ["/app/entrypoint.sh"]

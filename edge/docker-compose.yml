@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # Edge本地 MQTT Broker (Broker #1) - 仅TLS
+  # ==========================================================================
+  edge-mqtt:
+    image: nn7fm5xf4cl9hj.xuanyuan.run/eclipse-mosquitto:2.0
+    container_name: edge-mqtt
+    restart: unless-stopped
+    volumes:
+      - ./configs/mosquitto_docker.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./configs/certs:/mosquitto/certs  # 去掉只读标志，允许容器更改权限
+      - ./logs/mosquitto:/mosquitto/log
+      - ./data/mosquitto:/mosquitto/data
+    ports:
+      - "8883:8883"   # MQTT TLS端口 (仅加密，orangepi和Edge服务使用)
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt --insecure -t '$$SYS/#' -C 1 | head -1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==========================================================================
+  # Edge服务端
+  # ==========================================================================
+  edge-system:
+    image: edge-system:latest
+    container_name: edge-system
+    restart: unless-stopped
+
+    # 网络模式 - 使用 host 模式
+    network_mode: host
+
+    # 数据卷挂载
+    volumes:
+      - ./data:/app/data              # SQLite 数据库
+      - ./logs:/app/logs              # 日志文件
+      - ./configs:/app/configs     # 配置文件
+
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "-O", "/dev/null", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # 环境变量
+    environment:
+      - TZ=Asia/Shanghai
+      - DEPLOYMENT_ENV=${DEPLOYMENT_ENV:-production}
+      - CLOUD_ENDPOINT=${CLOUD_ENDPOINT:-http://150.158.102.52:8003/api/v1}
+      - MQTT_BROKER_ADDRESS=${MQTT_BROKER_ADDRESS:-ssl://150.158.102.52:8884}
+
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
