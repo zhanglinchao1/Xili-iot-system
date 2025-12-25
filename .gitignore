@@ -1,0 +1,136 @@
+# XiLi IoT Project - Root .gitignore
+
+# ====================
+# Sensitive Files
+# ====================
+# ZKP Keys (CRITICAL - Never commit!)
+auth_proving.key
+auth_verifying.key
+**/auth_proving.key
+**/auth_verifying.key
+
+# License files
+license.lic
+*.lic
+vendor_pubkey.pem
+**/license.lic
+**/vendor_pubkey.pem
+
+# TLS Certificates and Private Keys
+*.key
+*.crt
+*.pem
+*.csr
+config/certs/
+configs/certs/
+**/config/certs/
+**/configs/certs/
+
+# Configuration files with secrets
+device_config.json
+**/device_config.json
+*.env
+.env
+.env.*
+*.local
+
+# ====================
+# Build Artifacts
+# ====================
+# Compiled binaries
+orangepi_gateway
+edge
+cloud
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+build/
+dist/
+
+# Go build artifacts
+*.test
+*.out
+*.coverprofile
+coverage/
+
+# ====================
+# Databases & Data
+# ====================
+*.db
+*.sqlite
+*.sqlite3
+data/
+**/data/*.db
+**/data/*.sqlite
+
+# ====================
+# Logs
+# ====================
+*.log
+logs/
+**/logs/
+orangepi.log
+
+# ====================
+# Dependencies
+# ====================
+# Go
+vendor/
+go.work
+
+# Node.js
+node_modules/
+**/node_modules/
+package-lock.json
+
+# ====================
+# IDE & Editors
+# ====================
+.idea/
+.vscode/
+.claude/
+.cursor/
+.specify/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ====================
+# Temporary Files
+# ====================
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+
+# ====================
+# Frontend Build
+# ====================
+**/frontend/dist/
+**/frontend/.vite/
+**/frontend/.cache/
+
+# ====================
+# OS Files
+# ====================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ====================
+# Docker
+# ====================
+*.pid
+
+# ====================
+# Keep these files
+# ====================
+# Keep example/template files
+!*.example
+!*.template
